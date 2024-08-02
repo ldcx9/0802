@@ -1,7 +1,7 @@
 <template>
   <div v-loading="loading" class="bg_img">
     <div class="position_center">
-      <div class="title_login">智能文字识别系统</div>
+      <div class="title_login">机器人管理系统</div>
       <div class="box_login">
         <div class="header_title margin_bottom_20">欢迎登录</div>
         <div class="login_user margin_bottom_20">
