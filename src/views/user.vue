@@ -32,18 +32,12 @@
     </el-table>
 
     <!-- 分页 -->
-    <div class="pagination-container">
-      <el-pagination
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-        :current-page="currentPage"
-        :page-sizes="[10, 20, 50, 100]"
-        :page-size="pageSize"
-        layout="total, sizes, prev, pager, next, jumper"
-        :total="userList.length"
-      >
-      </el-pagination>
-    </div>
+    <Pagination
+      :total="userList.length"
+      :current-page.sync="currentPage"
+      :page-size.sync="pageSize"
+      @change="handlePageChange"
+    />
 
     <!-- 添加/编辑用户对话框 -->
     <el-dialog :title="dialogTitle" :visible.sync="dialogVisible" width="30%">
@@ -89,28 +83,14 @@
 </template>
 
 <script>
-import axios from 'axios';
-
-// 创建 axios 实例
-const axiosInstance = axios.create({
-  baseURL: 'http://106.55.225.211:81', // 替换为您的 API 基础 URL
-});
-
-// 添加请求拦截器
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+import { getAllUsers, findUserByName, updateUser, deleteUser, registerUser } from '@/api';
+import Pagination from '@/components/common/Pagination.vue';
 
 export default {
+  name: 'UserManagement',
+  components: {
+    Pagination
+  },
   data() {
     return {
       loading: false,
@@ -137,11 +117,10 @@ export default {
     };
   },
   methods: {
-    // 获取所有用户
     async getAllUsers() {
       this.loading = true;
       try {
-        const response = await axiosInstance.get('/api/Auth/GetAllUsers');
+        const response = await getAllUsers();
         if (response.data.code === 2000) {
           this.userList = response.data.data;
         } else {
@@ -154,7 +133,6 @@ export default {
         this.loading = false;
       }
     },
-    // 搜索用户
     async searchUser() {
       if (!this.searchUsername) {
         await this.getAllUsers();
@@ -162,7 +140,7 @@ export default {
       }
       this.loading = true;
       try {
-        const response = await axiosInstance.get(`/api/Auth/FindByUserName?userName=${this.searchUsername}`);
+        const response = await findUserByName(this.searchUsername);
         if (response.data.code === 2000) {
           this.userList = [response.data.data];
         } else {
@@ -175,15 +153,12 @@ export default {
         this.loading = false;
       }
     },
-      // 显示修改密码对话框
-      showChangePasswordDialog(user) {
+    showChangePasswordDialog(user) {
       this.passwordForm.userId = user.id;
       this.passwordForm.newPassword = '';
       this.passwordForm.confirmPassword = '';
       this.passwordDialogVisible = true;
     },
-
-    // 提交密码修改
     async submitPasswordChange() {
       if (this.passwordForm.newPassword !== this.passwordForm.confirmPassword) {
         this.$message.error('两次输入的密码不一致');
@@ -191,8 +166,8 @@ export default {
       }
 
       try {
-        const response = await axiosInstance.put(`/api/Auth/UpdateUser/${this.passwordForm.userId}`, {
-          NewPassword: this.passwordForm.newPassword
+        const response = await updateUser(this.passwordForm.userId, {
+          newPassword: this.passwordForm.newPassword
         });
         if (response.data.code === 2000) {
           this.$message.success('密码修改成功');
@@ -205,15 +180,12 @@ export default {
         this.$message.error(error.message || '修改密码失败');
       }
     },
-   // 编辑用户
-   async editUser(user) {
+    editUser(user) {
       this.dialogTitle = '编辑用户';
       this.userForm = { ...user };
       this.dialogVisible = true;
       this.editMode = true;
     },
-
-    // 删除用户
     async deleteUser(user) {
       try {
         await this.$confirm('确认删除该用户?', '提示', {
@@ -222,10 +194,10 @@ export default {
           type: 'warning'
         });
 
-        const response = await axiosInstance.delete(`/api/Auth/DeleteUser/${user.id}`);
+        const response = await deleteUser(user.id);
         if (response.data.code === 2000) {
           this.$message.success('用户已删除');
-          await this.getAllUsers(); // 重新获取用户列表
+          await this.getAllUsers();
         } else {
           throw new Error(response.data.message);
         }
@@ -236,31 +208,17 @@ export default {
         }
       }
     },
-
-    // 提交用户表单
     async submitUserForm() {
       try {
         if (this.editMode) {
-          // 编辑用户
-          const response = await axiosInstance.put(`/api/Auth/UpdateUser/${this.userForm.id}`, {
-            userName: this.userForm.userName,
-            email: this.userForm.email,
-            role: this.userForm.role,
-            newPassword: this.userForm.password // 如果有更新密码的需求
-          });
+          const response = await updateUser(this.userForm.id, this.userForm);
           if (response.data.code === 2000) {
             this.$message.success('用户信息已更新');
           } else {
             throw new Error(response.data.message);
           }
         } else {
-          // 添加新用户
-          const response = await axiosInstance.post('/api/Auth/Register', {
-            userName: this.userForm.userName,
-            password: this.userForm.password,
-            email: this.userForm.email,
-            role: this.userForm.role
-          });
+          const response = await registerUser(this.userForm);
           if (response.data.code === 2000) {
             this.$message.success('添加用户成功');
           } else {
@@ -268,7 +226,7 @@ export default {
           }
         }
         this.dialogVisible = false;
-        await this.getAllUsers(); // 刷新用户列表
+        await this.getAllUsers();
       } catch (error) {
         console.error('操作失败:', error);
         this.$message.error(error.message || '操作失败');
@@ -276,7 +234,6 @@ export default {
         this.editMode = false;
       }
     },
-    // 显示添加用户对话框
     showAddUserDialog() {
       this.dialogTitle = '添加用户';
       this.userForm = {
@@ -288,12 +245,9 @@ export default {
       };
       this.dialogVisible = true;
     },
- 
-    handleSizeChange(val) {
-      this.pageSize = val;
-    },
-    handleCurrentChange(val) {
-      this.currentPage = val;
+    handlePageChange() {
+      // 当页码改变时，可能需要重新获取数据
+      // 如果是前端分页，这里可以不做任何操作
     }
   },
   mounted() {
@@ -313,9 +267,5 @@ export default {
 }
 .input-with-select {
   width: 300px;
-}
-.pagination-container {
-  margin-top: 20px;
-  text-align: right;
 }
 </style>

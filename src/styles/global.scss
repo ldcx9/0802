@@ -1,0 +1,67 @@
+// Variables
+$primary-color: #00c08f;
+$secondary-color: #409EFF;
+$danger-color: #F56C6C;
+$success-color: #67C23A;
+$warning-color: #E6A23C;
+$text-color: #333;
+$border-color: #DCDFE6;
+
+// Mixins
+@mixin flex-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+// Global styles
+.flex {
+  display: flex;
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+}
+
+.margin-bottom {
+  &-10 { margin-bottom: 10px; }
+  &-15 { margin-bottom: 15px; }
+  &-20 { margin-bottom: 20px; }
+}
+
+.margin-right {
+  &-20 { margin-right: 20px; }
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.page-container {
+  padding: 20px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  padding: 20px;
+}
+
+.form-actions {
+  text-align: right;
+  margin-top: 20px;
+}
+
+.table-actions {
+  .el-button {
+    padding: 3px 0;
+    margin-right: 10px;
+  }
+}
+
+.dialog-footer {
+  text-align: right;
+  margin-top: 20px;
+}

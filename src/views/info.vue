@@ -8,7 +8,6 @@
         v-model="searchKeyword"
         placeholder="搜索登记信息"
         class="input-with-select"
-        @keyup.enter.native="searchRegistrations"
       >
         <el-button slot="append" icon="el-icon-search" @click="searchRegistrations"></el-button>
       </el-input>
@@ -53,20 +52,12 @@
     </el-table>
 
     <!-- 分页 -->
-    <div class="pagination-container">
-      <el-pagination
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-        :current-page="currentPage"
-        :page-sizes="[10, 20, 50, 100]"
-        :page-size="pageSize"
-        layout="total, sizes, prev, pager, next, jumper"
-        :total="total"
-        :pager-count="5"
-        :hide-on-single-page="false"
-      >
-      </el-pagination>
-    </div>
+    <Pagination
+      :total="total"
+      :current-page.sync="currentPage"
+      :page-size.sync="pageSize"
+      @change="getRegistrations"
+    />
 
     <!-- 更新备注对话框 -->
     <el-dialog title="更新备注" :visible.sync="updateRemarkDialogVisible" width="30%">
@@ -82,30 +73,15 @@
     </el-dialog>
   </div>
 </template>
-
 <script>
-import axios from 'axios';
-
-const baseURL = 'http://106.55.225.211:81';
-
-const axiosInstance = axios.create({
-  baseURL: baseURL,
-});
-
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+import { getQusPage, updateQusStatus, updateQusRemark, deleteQus } from '@/api';
+import Pagination from '@/components/common/Pagination.vue';
 
 export default {
+  name: 'RegistrationInfoManagement',
+  components: {
+    Pagination
+  },
   data() {
     return {
       searchKeyword: '',
@@ -125,32 +101,17 @@ export default {
   },
   methods: {
     async getRegistrations() {
-      if (!this.hasMoreData && this.currentPage > 1) {
-        this.currentPage--;
-        return;
-      }
-
       try {
-        const response = await axiosInstance.get('/api/Qus/GetPage', {
-          params: {
-            pageIndex: this.currentPage,
-            pageSize: this.pageSize,
-            isResolved: this.isResolved,
-            sortByCreatedTimeDesc: this.sortByCreatedTimeDesc
-          }
-        });
+        const response = await getQusPage(
+          this.currentPage,
+          this.pageSize,
+          this.isResolved,
+          this.sortByCreatedTimeDesc
+        );
         if (response.data.code === 2000) {
-          if (response.data.data.length === 0) {
-            this.hasMoreData = false;
-            if (this.currentPage > 1) {
-              this.currentPage--;
-            }
-            this.$message.info('没有更多数据了');
-          } else {
-            this.registrationList = response.data.data;
-            this.total = (this.currentPage * this.pageSize) + (response.data.data.length === this.pageSize ? this.pageSize : 0);
-            this.hasMoreData = response.data.data.length === this.pageSize;
-          }
+          this.registrationList = response.data.data;
+          this.total = response.data.total;
+          this.hasMoreData = response.data.data.length === this.pageSize;
         } else {
           this.$message.error(response.data.message);
         }
@@ -166,7 +127,7 @@ export default {
     },
     async updateStatus(row) {
       try {
-        const response = await axiosInstance.patch(`/api/Qus/UpdateStatus?id=${row.id}&isOk=${!row.isOk}`);
+        const response = await updateQusStatus(row.id, !row.isOk);
         if (response.data.code === 2000) {
           this.$message.success('状态已更新');
           this.getRegistrations();
@@ -185,9 +146,7 @@ export default {
     },
     async updateRemark() {
       try {
-        const response = await axiosInstance.patch(`/api/Qus/UpdateRemark?id=${this.updateRemarkForm.id}`, JSON.stringify(this.updateRemarkForm.remark), {
-          headers: { 'Content-Type': 'application/json' }
-        });
+        const response = await updateQusRemark(this.updateRemarkForm.id, this.updateRemarkForm.remark);
         if (response.data.code === 2000) {
           this.$message.success('备注已更新');
           this.updateRemarkDialogVisible = false;
@@ -207,7 +166,7 @@ export default {
           cancelButtonText: '取消',
           type: 'warning'
         });
-        const response = await axiosInstance.delete(`/api/Qus/Delete?id=${id}`);
+        const response = await deleteQus(id);
         if (response.data.code === 2000 && response.data.data.isSuccess) {
           this.$message.success('登记信息已删除');
           this.getRegistrations();
@@ -221,78 +180,9 @@ export default {
         }
       }
     },
-    handleSizeChange(val) {
-      this.pageSize = val;
-      this.currentPage = 1;
-      this.hasMoreData = true;
-      this.getRegistrations();
-    },
-    handleCurrentChange(val) {
-      this.currentPage = val;
-      this.getRegistrations();
-    }
   },
   mounted() {
     this.getRegistrations();
   }
 };
 </script>
-
-<style scoped>
-.registration-info-management {
-  padding: 20px;
-}
-
-.management-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.input-with-select {
-  width: 300px;
-}
-
-.pagination-container {
-  margin-top: 20px;
-  text-align: right;
-}
-
-.el-dialog__body {
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.el-table {
-  width: 100% !important;
-}
-
-.el-table .cell {
-  white-space: nowrap;
-}
-
-.el-dialog .el-form-item {
-  margin-bottom: 20px;
-}
-
-.dialog-footer {
-  text-align: right;
-}
-
-.el-dialog__header {
-  background-color: #f5f7fa;
-  padding: 15px 20px;
-}
-
-.el-dialog__title {
-  font-weight: bold;
-}
-
-.el-button--text {
-  margin-right: 10px;
-}
-
-.el-switch {
-  margin-left: 10px;
-}
-</style>

@@ -31,28 +31,10 @@
 </template>
 
 <script>
-import axios from 'axios';
-
-const baseURL = 'http://106.55.225.211:81';
-
-const axiosInstance = axios.create({
-  baseURL: baseURL,
-});
-
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+import { getConfig, updateConfig } from '@/api';
 
 export default {
+  name: 'SystemSettings',
   data() {
     return {
       configForm: {
@@ -76,7 +58,7 @@ export default {
   methods: {
     async getConfig() {
       try {
-        const response = await axiosInstance.get('/api/Config/GetConfig');
+        const response = await getConfig();
         if (response.data.code === 2000) {
           this.configForm = response.data.data;
           this.$message.success('配置信息已刷新');
@@ -92,7 +74,7 @@ export default {
       this.$refs[formName].validate(async (valid) => {
         if (valid) {
           try {
-            const response = await axiosInstance.post('/api/Config/UpdateConfig', this.configForm);
+            const response = await updateConfig(this.configForm);
             if (response.data.code === 2000) {
               this.$message.success('配置已更新');
               this.getConfig(); // 重新获取配置以确保显示最新数据
@@ -121,35 +103,17 @@ export default {
 
 <style scoped>
 .system-settings {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  background-color: #f0f2f5;
+  padding: 20px;
 }
 
 .settings-card {
-  width: 500px;
-  max-width: 90%;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.el-form-item {
-  margin-bottom: 22px;
-}
-
-.el-button {
-  width: 120px;
-}
-
-.el-input-number {
-  width: 180px;
 }
 </style>

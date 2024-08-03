@@ -51,6 +51,7 @@
 
 <script>
 import * as echarts from 'echarts';
+import { getStatistics } from '@/api';
 
 export default {
   name: 'StatisticsDashboard',
@@ -71,30 +72,20 @@ export default {
     };
   },
   methods: {
-    fetchStatistics() {
-      const { startDate, endDate, area } = this.form;
-      this.$axios.get('http://106.55.225.211:81/api/QusInt/GetStatistics', {
-        params: {
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-          area
-        },
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
-      })
-      .then(response => {
+    async fetchStatistics() {
+      try {
+        const { startDate, endDate, area } = this.form;
+        const response = await getStatistics(startDate.toISOString(), endDate.toISOString(), area);
         if (response.data.code === 2000) {
           this.statistics = response.data.data;
           this.updateChart();
         } else {
           this.$message.error(response.data.message);
         }
-      })
-      .catch(error => {
+      } catch (error) {
         console.error('Error fetching statistics:', error);
         this.$message.error('获取统计数据失败');
-      });
+      }
     },
     updateChart() {
       if (!this.chart) {
@@ -172,5 +163,96 @@ export default {
 }
 .el-progress {
   width: calc(100% - 140px);
+}
+</style>
+
+<style scoped>
+.keyword-reply-management {
+  padding: 20px;
+}
+
+.management-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.input-with-select {
+  width: 300px;
+}
+
+.el-table {
+  margin-bottom: 20px;
+}
+
+.reply-info {
+  margin-bottom: 10px;
+}
+
+.keyword-reply-form {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.reply-item, .two-reply-item {
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.two-reply-item {
+  background-color: #f5f7fa;
+}
+
+.reply-item .el-select,
+.reply-item .el-input,
+.reply-item .el-upload,
+.reply-item .el-button {
+  margin-right: 10px;
+  margin-bottom: 10px;
+}
+
+.el-image {
+  display: block;
+  margin-top: 10px;
+}
+
+.el-tag {
+  margin-right: 10px;
+  margin-bottom: 10px;
+}
+
+.input-new-tag {
+  width: 90px;
+  margin-right: 10px;
+  vertical-align: bottom;
+}
+
+.button-new-tag {
+  height: 32px;
+  line-height: 30px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.dialog-footer {
+  text-align: right;
+}
+
+/* 响应式布局 */
+@media screen and (max-width: 768px) {
+  .management-header {
+    flex-direction: column;
+  }
+
+  .input-with-select {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+
+  .el-dialog {
+    width: 90% !important;
+  }
 }
 </style>

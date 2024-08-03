@@ -73,24 +73,18 @@
     </el-table>
 
     <!-- 分页 -->
-    <div class="pagination-container">
-      <el-pagination
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-        :current-page="currentPage"
-        :page-sizes="[10, 20, 50, 100]"
-        :page-size="pageSize"
-        layout="total, sizes, prev, pager, next, jumper"
-        :total="total"
-      >
-      </el-pagination>
-    </div>
+    <Pagination
+      :total="total"
+      :current-page.sync="currentPage"
+      :page-size.sync="pageSize"
+      @change="getAllKeywordReplies"
+    />
 
     <!-- 添加/编辑对话框 -->
     <el-dialog :title="dialogTitle" :visible.sync="dialogVisible" width="60%">
       <el-form :model="keywordReplyForm" label-width="120px" class="keyword-reply-form">
         <el-form-item label="检测关键词">
-          <el-input v-model="keywordReplyForm.keyText"></el-input>
+          <el-input v-model="keywordReplyForm.keyText" v-if="keywordReplyForm"></el-input>
         </el-form-item>
         <el-form-item label="精准匹配">
           <el-switch v-model="keywordReplyForm.isAccurate"></el-switch>
@@ -234,31 +228,16 @@
 </template>
 
 <script>
-import axios from 'axios';
-
-const baseURL = 'http://106.55.225.211:81';
-
-const axiosInstance = axios.create({
-  baseURL: baseURL,
-});
-
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+import { getAllKeyWordReplies, searchKeyWordReplies, addKeyWordReply, updateKeyWordReply, deleteKeyWordReply, uploadFile } from '@/api';
+import Pagination from '@/components/common/Pagination.vue';
 
 export default {
+  name: 'KeywordReplyManagement',
+  components: {
+    Pagination
+  },
   data() {
     return {
-      loading: false,
       searchKeyword: '',
       keywordReplyList: [],
       currentPage: 1,
@@ -278,21 +257,21 @@ export default {
         speacalkeyWordTwoInfos: [],
         keyCheck: []
       },
-      inputVisible: false,
-      inputValue: '',
-      uploadUrl: `${baseURL}/api/File/Upload`,
+      uploadUrl: `${process.env.VUE_APP_API_BASE_URL}/api/File/Upload`,
       uploadHeaders: {
         Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
+      },
+      inputVisible: false,
+      inputValue: ''
     };
   },
   methods: {
     async getAllKeywordReplies() {
       try {
-        const response = await axiosInstance.get(`/api/KeyWordReply/GetAllKeyWordReplyLimitPage?pageIndex=${this.currentPage}&pageSize=${this.pageSize}`);
+        const response = await getAllKeyWordReplies(this.currentPage, this.pageSize);
         if (response.data.code === 2000) {
           this.keywordReplyList = response.data.data;
-          this.total = response.data.data.length; // 这里可能需要根据实际返回的数据结构进行调整
+          this.total = response.data.total;
         } else {
           this.$message.error(response.data.message);
         }
@@ -303,7 +282,7 @@ export default {
     },
     async searchKeywordReply() {
       try {
-        const response = await axiosInstance.get(`/api/KeyWordReply/GetAllKeyWordReplyLink?name=${this.searchKeyword}`);
+        const response = await searchKeyWordReplies(this.searchKeyword);
         if (response.data.code === 2000) {
           this.keywordReplyList = response.data.data;
           this.total = response.data.data.length;
@@ -323,7 +302,6 @@ export default {
         default: return '未知';
       }
     },
-
     handleUploadSuccess(response, info) {
       if (response.code === 2000) {
         info.text = response.data;
@@ -335,32 +313,6 @@ export default {
     getFileName(path) {
       return path.split('/').pop();
     },
-    getContentPreview(info) {
-      if (!info) return '无内容';
-      switch(info.type) {
-        case 1: return info.text;
-        case 2: return '图片';
-        case 3: return `文件: ${this.getFileName(info.text)}`;
-        default: return '未知内容';
-      }
-    },
-
-    beforeUpload(file) {
-      const isImage = file.type.startsWith('image/');
-      const isAudio = file.type.startsWith('audio/');
-      const isLt2M = file.size / 1024 / 1024 < 2;
-
-      if (!isImage && !isAudio) {
-        this.$message.error('上传文件只能是图片或音频格式!');
-        return false;
-      }
-      if (!isLt2M) {
-        this.$message.error('上传文件大小不能超过 2MB!');
-        return false;
-      }
-      return true;
-    },
-
     showAddDialog() {
       this.dialogTitle = '添加关键词回复';
       this.keywordReplyForm = {
@@ -389,7 +341,7 @@ export default {
           cancelButtonText: '取消',
           type: 'warning'
         });
-        const response = await axiosInstance.delete(`/api/KeyWordReply/DeleteKeyWordReply?id=${id}`);
+        const response = await deleteKeyWordReply(id);
         if (response.data.code === 2000 && response.data.data.isSuccess) {
           this.$message.success('关键词回复已删除');
           await this.getAllKeywordReplies();
@@ -407,9 +359,9 @@ export default {
       try {
         let response;
         if (this.keywordReplyForm.id === 0) {
-          response = await axiosInstance.post('/api/KeyWordReply/AddKeyWordReply', this.keywordReplyForm);
+          response = await addKeyWordReply(this.keywordReplyForm);
         } else {
-          response = await axiosInstance.post('/api/KeyWordReply/UpdateKeyWordReply', this.keywordReplyForm);
+          response = await updateKeyWordReply(this.keywordReplyForm);
         }
         if (response.data.code === 2000) {
           this.$message.success(this.keywordReplyForm.id === 0 ? '添加成功' : '更新成功');
@@ -424,7 +376,7 @@ export default {
       }
     },
     addKeyWordInfo(target, index) {
-      const newInfo = { type: 0, text: '' };
+      const newInfo = { type: 1, text: '' };
       if (target === 'keyWordTwoInfos') {
         this.keywordReplyForm[target][index].text.push(newInfo);
       } else {
@@ -449,36 +401,14 @@ export default {
       this.$nextTick(_ => {
         this.$refs.saveTagInput.$refs.input.focus();
       });
-    },  handleInputConfirm() {
+    },
+    handleInputConfirm() {
       let inputValue = this.inputValue;
       if (inputValue) {
         this.keywordReplyForm.keyCheck.push(inputValue);
       }
       this.inputVisible = false;
       this.inputValue = '';
-    },
-    handleSizeChange(val) {
-      this.pageSize = val;
-      this.currentPage = 1;
-      this.getAllKeywordReplies();
-    },
-    handleCurrentChange(val) {
-      this.currentPage = val;
-      this.getAllKeywordReplies();
-    },
-    resetForm() {
-      this.keywordReplyForm = {
-        id: 0,
-        isAccurate: false,
-        isOpen: true,
-        keyText: '',
-        keyWordInfos: [],
-        keyWordTwoInfos: [],
-        isSpeacalQus: false,
-        replyKey: '',
-        speacalkeyWordTwoInfos: [],
-        keyCheck: []
-      };
     }
   },
   mounted() {
@@ -486,99 +416,3 @@ export default {
   }
 };
 </script>
-<style scoped>
-.keyword-reply-management {
-  padding: 20px;
-}
-
-.management-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.input-with-select {
-  width: 300px;
-}
-
-.pagination-container {
-  margin-top: 20px;
-  text-align: right;
-}
-
-.el-tag + .el-tag {
-  margin-left: 10px;
-}
-
-.button-new-tag {
-  margin-left: 10px;
-  height: 32px;
-  line-height: 30px;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-.input-new-tag {
-  width: 90px;
-  margin-left: 10px;
-  vertical-align: bottom;
-}
-
-.keyword-reply-form .el-form-item {
-  margin-bottom: 22px;
-}
-
-.reply-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-  padding: 10px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-}
-
-.reply-item .el-select {
-  margin-right: 10px;
-}
-
-.reply-item .el-input {
-  margin-right: 10px;
-}
-
-.reply-item .el-button {
-  margin-left: 10px;
-}
-
-.two-reply-item {
-  margin-bottom: 15px;
-  padding: 15px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  background-color: #f5f7fa;
-}
-
-.two-reply-item .el-input {
-  margin-bottom: 10px;
-}
-
-.el-image {
-  margin-top: 10px;
-}
-
-audio {
-  margin-top: 10px;
-}
-
-.el-dialog__body {
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.el-popover {
-  max-width: 300px;
-}
-
-.el-popover p {
-  margin: 5px 0;
-}
-</style>

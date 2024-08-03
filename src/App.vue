@@ -4,28 +4,18 @@
   </div>
 </template>
 
-<style>
-.flex{
-  display: flex;
-}
-.flex_sp{
-  display: flex;
-  justify-content: space-between;
-}
-.margin_bottom_20{
-  margin-bottom: 20px;
-}
-.margin_bottom_15{
-  margin-bottom: 15px;
-}
-.margin_bottom_10{
-  margin-bottom: 10px;
-}
-.margin_right_20{
-  margin-right: 20px;
-}
-.div_cursor{
-  cursor: default;
+<style lang="scss">
+@import './styles/global.scss';
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
 }
 
+#app {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #2c3e50;
+}
 </style>

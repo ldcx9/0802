@@ -2,8 +2,8 @@
   <div class="group-chat-management">
     <h2>群聊管理</h2>
 
-      <!-- 搜索和更新按钮 -->
-      <div class="management-header">
+    <!-- 搜索和更新按钮 -->
+    <div class="management-header">
       <el-input
         v-model="searchKeyword"
         placeholder="搜索群聊"
@@ -48,20 +48,12 @@
     </el-table>
 
     <!-- 分页 -->
-    <div class="pagination-container">
-      <el-pagination
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-        :current-page="currentPage"
-        :page-sizes="[10, 20, 50, 100]"
-        :page-size="pageSize"
-        layout="total, sizes, prev, pager, next, jumper"
-        :total="total"
-        :pager-count="5"
-        :hide-on-single-page="false"
-      >
-      </el-pagination>
-    </div>
+    <Pagination
+      :total="total"
+      :current-page.sync="currentPage"
+      :page-size.sync="pageSize"
+      @change="getAllGroups"
+    />
 
     <!-- 群成员对话框 -->
     <el-dialog title="群成员列表" :visible.sync="memberDialogVisible" width="80%">
@@ -112,9 +104,8 @@
       </span>
     </el-dialog>
 
-    <!-- 其他对话框保持不变 -->
-      <!-- 更新地区对话框 -->
-      <el-dialog title="更新公司地区" :visible.sync="updateAreasDialogVisible" width="30%">
+    <!-- 更新地区对话框 -->
+    <el-dialog title="更新公司地区" :visible.sync="updateAreasDialogVisible" width="30%">
       <el-form :model="updateAreasForm">
         <el-form-item label="公司地区">
           <el-input v-model="updateAreasForm.areas"></el-input>
@@ -153,36 +144,30 @@
     </el-dialog>
   </div>
 </template>
-
 <script>
-import axios from 'axios';
-
-const baseURL = 'http://106.55.225.211:81';
-
-const axiosInstance = axios.create({
-  baseURL: baseURL,
-});
-
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+import { 
+  getAllGroups, 
+  searchGroups, 
+  updateGroupInfo, 
+  updateGroupStatus, 
+  getGroupInfo, 
+  getAllGroupMembers, 
+  addHeadPerson, 
+  removeHeadPerson, 
+  updateHeadPersonWeeks, 
+  updateGroupMembers, 
+  updateGroupAreas, 
+  updateGroupCompanyName 
+} from '@/api';
+import Pagination from '@/components/common/Pagination.vue';
 
 export default {
+  name: 'GroupChatManagement',
+  components: {
+    Pagination
+  },
   data() {
     return {
-      currentPage: 1,
-      pageSize: 10,
-      total: 0,
-      hasMoreData: true,
       searchKeyword: '',
       groupList: [],
       currentPage: 1,
@@ -217,15 +202,10 @@ export default {
   methods: {
     async getAllGroups() {
       try {
-        let url = `/api/Group/GetAllGroupLimitPage?pageIndex=${this.currentPage}&pageSize=${this.pageSize}`;
-        if (this.isSearching) {
-          url = `/api/Group/GetAllGroupLink?name=${this.searchKeyword}`;
-        }
-        const response = await axiosInstance.get(url);
+        const response = await getAllGroups(this.currentPage, this.pageSize);
         if (response.data.code === 2000) {
           this.groupList = response.data.data;
-          this.total = response.data.total || (this.isSearching ? response.data.data.length : this.currentPage * this.pageSize + (response.data.data.length < this.pageSize ? 0 : this.pageSize));
-          this.hasMoreData = response.data.data.length === this.pageSize;
+          this.total = response.data.total;
         } else {
           this.$message.error(response.data.message);
         }
@@ -234,37 +214,9 @@ export default {
         this.$message.error('获取群聊列表失败');
       }
     },
-
-    async searchGroups() {
-      this.isSearching = true;
-      this.currentPage = 1;
-      await this.getAllGroups();
-    },
-
-    async refreshGroupList() {
-      await this.getAllGroups();
-    },
-
-    async refreshGroupMembers() {
-      if (this.currentGroup) {
-        await this.showGroupMembers(this.currentGroup);
-      }
-    },
-
-    handleSizeChange(val) {
-      this.pageSize = val;
-      this.currentPage = 1;
-      this.hasMoreData = true;
-      this.getAllGroups();
-    },
-
-    handleCurrentChange(val) {
-      this.currentPage = val;
-      this.getAllGroups();
-    },
     async searchGroups() {
       try {
-        const response = await axiosInstance.get(`/api/Group/GetAllGroupLink?name=${this.searchKeyword}`);
+        const response = await searchGroups(this.searchKeyword);
         if (response.data.code === 2000) {
           this.groupList = response.data.data;
           this.total = response.data.data.length;
@@ -278,7 +230,7 @@ export default {
     },
     async updateGroupInfo() {
       try {
-        const response = await axiosInstance.post('/api/Group/UpdateGroupInfo');
+        const response = await updateGroupInfo();
         if (response.data.code === 2000) {
           this.$message.success('群聊信息已更新');
           await this.getAllGroups();
@@ -292,7 +244,7 @@ export default {
     },
     async updateGroupStatus(groupId, isOpen) {
       try {
-        const response = await axiosInstance.post(`/api/Group/UpdateGroupStatus?groupId=${groupId}&isOpen=${isOpen}`);
+        const response = await updateGroupStatus(groupId, isOpen);
         if (response.data.code === 2000) {
           this.$message.success('群聊状态已更新');
         } else {
@@ -306,17 +258,15 @@ export default {
     async showGroupMembers(group) {
       this.currentGroup = group;
       try {
-        // 首先获取完整的群组信息
-        const groupResponse = await axiosInstance.get(`/api/Group/GetGroupInfo?name=${group.groupId}`);
+        const groupResponse = await getGroupInfo(group.groupId);
         if (groupResponse.data.code === 2000 && groupResponse.data.data.length > 0) {
-          this.currentGroup = groupResponse.data.data[0]; // 假设返回的是一个数组,我们取第一个匹配的群组
+          this.currentGroup = groupResponse.data.data[0];
         } else {
           this.$message.error('获取群组详细信息失败');
           return;
         }
 
-        // 然后获取群成员列表
-        const membersResponse = await axiosInstance.get(`/api/Group/GetAllGroupMember?groupId=${group.groupId}`);
+        const membersResponse = await getAllGroupMembers(group.groupId);
         if (membersResponse.data.code === 2000) {
           this.groupMembers = membersResponse.data.data;
           this.memberDialogVisible = true;
@@ -328,7 +278,6 @@ export default {
         this.$message.error('获取群成员列表失败');
       }
     },
-
     isHeadPerson(member) {
       if (!this.currentGroup || !this.currentGroup.headNickName) {
         return false;
@@ -337,7 +286,7 @@ export default {
     },
     async setHeadPerson(member) {
       try {
-        const response = await axiosInstance.post(`/api/Group/AddHeadPerson?groupId=${this.currentGroup.groupId}&userName=${member.userName}`);
+        const response = await addHeadPerson(this.currentGroup.groupId, member.userName);
         if (response.data.code === 2000) {
           this.$message.success('已设为负责人');
           this.currentGroup = response.data.data;
@@ -352,7 +301,7 @@ export default {
     },
     async removeHeadPerson(member) {
       try {
-        const response = await axiosInstance.post(`/api/Group/RemoveHeadPerson?groupId=${this.currentGroup.groupId}&userName=${member.userName}`);
+        const response = await removeHeadPerson(this.currentGroup.groupId, member.userName);
         if (response.data.code === 2000) {
           this.$message.success('已取消负责人');
           this.currentGroup = response.data.data;
@@ -376,7 +325,7 @@ export default {
     },
     async updateHeadPersonWeeks() {
       try {
-        const response = await axiosInstance.post(`/api/Group/UpdateHeadPersonWeeks?groupId=${this.setWeeksForm.groupId}&userName=${this.setWeeksForm.userName}`, this.setWeeksForm.weeks);
+        const response = await updateHeadPersonWeeks(this.setWeeksForm.groupId, this.setWeeksForm.userName, this.setWeeksForm.weeks);
         if (response.data.code === 2000) {
           this.$message.success('工作星期已更新');
           this.currentGroup = response.data.data;
@@ -392,28 +341,28 @@ export default {
     },
     async updateGroupMembers(groupId) {
       try {
-        const response = await axiosInstance.post(`/api/Group/UpdateGroupMembers?groupId=${groupId}`);
+        const response = await updateGroupMembers(groupId);
         if (response.data.code === 2000) {
           this.$message.success('群成员已更新');
           if (this.currentGroup && this.currentGroup.groupId === groupId) {
             await this.showGroupMembers(this.currentGroup);
           }
           await this.getAllGroups();
-        } else {this.$message.error(response.data.message);
+        } else {
+          this.$message.error(response.data.message);
         }
       } catch (error) {
         console.error('更新群成员失败:', error);
         this.$message.error('更新群成员失败');
       }
     },
-    handleSizeChange(val) {
-      this.pageSize = val;
-      this.currentPage = 1;
+    refreshGroupList() {
       this.getAllGroups();
     },
-    handleCurrentChange(val) {
-      this.currentPage = val;
-      this.getAllGroups();
+    refreshGroupMembers() {
+      if (this.currentGroup) {
+        this.showGroupMembers(this.currentGroup);
+      }
     },
     showUpdateAreasDialog(row) {
       this.updateAreasForm.groupId = row.groupId;
@@ -422,9 +371,7 @@ export default {
     },
     async updateGroupAreas() {
       try {
-        const response = await axiosInstance.post(`/api/Group/UpdateGroupAreas?groupId=${this.updateAreasForm.groupId}`, JSON.stringify(this.updateAreasForm.areas), {
-          headers: { 'Content-Type': 'application/json' }
-        });
+        const response = await updateGroupAreas(this.updateAreasForm.groupId, this.updateAreasForm.areas);
         if (response.data.code === 2000) {
           this.$message.success('公司地区已更新');
           this.updateAreasDialogVisible = false;
@@ -437,7 +384,6 @@ export default {
         this.$message.error('更新公司地区失败');
       }
     },
-
     showUpdateCompanyDialog(row) {
       this.updateCompanyForm.groupId = row.groupId;
       this.updateCompanyForm.companyName = row.companyName;
@@ -445,9 +391,7 @@ export default {
     },
     async updateGroupCompanyName() {
       try {
-        const response = await axiosInstance.post(`/api/Group/UpdateGroupCompanyName?groupId=${this.updateCompanyForm.groupId}`, JSON.stringify(this.updateCompanyForm.companyName), {
-          headers: { 'Content-Type': 'application/json' }
-        });
+        const response = await updateGroupCompanyName(this.updateCompanyForm.groupId, this.updateCompanyForm.companyName);
         if (response.data.code === 2000) {
           this.$message.success('公司名称已更新');
           this.updateCompanyDialogVisible = false;
@@ -467,7 +411,7 @@ export default {
     },
     async addHeadPerson() {
       try {
-        const response = await axiosInstance.post(`/api/Group/AddHeadPerson?groupId=${this.addHeadPersonForm.groupId}&userName=${this.addHeadPersonForm.userName}`);
+        const response = await addHeadPerson(this.addHeadPersonForm.groupId, this.addHeadPersonForm.userName);
         if (response.data.code === 2000) {
           this.$message.success('群组负责人已添加');
           this.addHeadPersonDialogVisible = false;
@@ -486,72 +430,3 @@ export default {
   }
 };
 </script>
-
-<style scoped>
-.group-chat-management {
-  padding: 20px;
-}
-
-.management-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.input-with-select {
-  width: 300px;
-}
-
-.pagination-container {
-  margin-top: 20px;
-  text-align: right;
-}
-
-.el-dialog__body {
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.el-table {
-  width: 100% !important;
-}
-
-.el-table .cell {
-  white-space: nowrap;
-}
-
-.el-dialog .el-form-item {
-  margin-bottom: 20px;
-}
-
-.dialog-footer {
-  text-align: right;
-}
-
-.el-dialog__header {
-  background-color: #f5f7fa;
-  padding: 15px 20px;
-}
-
-.el-dialog__title {
-  font-weight: bold;
-}
-
-.el-button--text {
-  margin-right: 10px;
-}
-
-.el-switch {
-  margin-left: 10px;
-}
-
-.el-checkbox-group {
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.el-checkbox {
-  margin-right: 15px;
-  margin-bottom: 10px;
-}
-</style>
